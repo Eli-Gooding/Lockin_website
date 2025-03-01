@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { Download, LogOut } from 'lucide-react';
 import Link from 'next/link';
 import type { User } from '@/lib/supabase';
+import { trackEvent, AnalyticsEvents } from '@/lib/analytics';
 
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -29,6 +30,12 @@ export default function DashboardPage() {
 
         const userData = await fetch('/api/user').then(res => res.json());
         setUser(userData);
+        
+        // Track dashboard view
+        trackEvent(AnalyticsEvents.VIEW_DASHBOARD, {
+          userId: userData.id,
+          hasSubscription: userData.has_active_subscription
+        });
       } catch (error) {
         console.error('Error fetching user:', error);
         toast({
@@ -47,6 +54,10 @@ export default function DashboardPage() {
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut();
+      
+      // Track sign out
+      trackEvent(AnalyticsEvents.SIGN_OUT);
+      
       router.push('/');
       router.refresh();
     } catch (error) {
@@ -80,6 +91,13 @@ export default function DashboardPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      
+      // Track app download from dashboard
+      trackEvent(AnalyticsEvents.DOWNLOAD_APP, {
+        platform,
+        fromDashboard: true,
+        hasSubscription: user?.has_active_subscription
+      });
       
       toast({
         title: 'Download started',

@@ -9,6 +9,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { trackEvent, AnalyticsEvents } from '@/lib/analytics';
 
 export default function UpdatePasswordPage() {
   const [password, setPassword] = useState('');
@@ -75,9 +76,14 @@ export default function UpdatePasswordPage() {
     setIsUpdating(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      const { error, data } = await supabase.auth.updateUser({ password });
       
       if (error) throw error;
+      
+      // Track password update
+      trackEvent(AnalyticsEvents.UPDATE_PASSWORD, {
+        userId: data.user?.id
+      });
       
       toast({
         title: 'Password updated',

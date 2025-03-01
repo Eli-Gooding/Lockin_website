@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+import { trackEvent, AnalyticsEvents } from '@/lib/analytics';
 
 export default function SignInForm() {
   const [email, setEmail] = useState('');
@@ -30,7 +31,7 @@ export default function SignInForm() {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error, data } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -38,6 +39,11 @@ export default function SignInForm() {
       if (error) {
         throw error;
       }
+
+      // Track successful sign in
+      trackEvent(AnalyticsEvents.SIGN_IN, {
+        userId: data.user?.id
+      });
 
       toast({
         title: 'Success',

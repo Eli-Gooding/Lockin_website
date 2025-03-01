@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { CreditCard, Shield, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import type { User } from '@/lib/supabase';
+import { trackEvent, AnalyticsEvents } from '@/lib/analytics';
 
 export default function CheckoutPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -36,6 +37,9 @@ export default function CheckoutPage() {
         }
         
         setUser(userData);
+        
+        // Track checkout page view
+        trackEvent(AnalyticsEvents.VIEW_CHECKOUT);
       } catch (error) {
         console.error('Error fetching user:', error);
         toast({
@@ -62,6 +66,12 @@ export default function CheckoutPage() {
     }
 
     setIsProcessing(true);
+    
+    // Track checkout start
+    trackEvent(AnalyticsEvents.START_CHECKOUT, {
+      email: user.email,
+      userId: user.id
+    });
 
     try {
       const response = await fetch('/api/create-checkout-session', {

@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/supabase';
 import { Mail } from 'lucide-react';
+import { trackEvent, AnalyticsEvents } from '@/lib/analytics';
 
 export default function SignUpForm() {
   const [email, setEmail] = useState('');
@@ -65,6 +66,12 @@ export default function SignUpForm() {
       if (error) {
         throw error;
       }
+
+      // Track successful sign up
+      trackEvent(AnalyticsEvents.SIGN_UP, {
+        userId: data.user?.id,
+        hasUsername: !!username
+      });
 
       // Update the profile with username if provided
       if (username && data.user) {

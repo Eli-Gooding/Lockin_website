@@ -9,6 +9,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { trackEvent, AnalyticsEvents } from '@/lib/analytics';
 
 export default function UpdateEmailPage() {
   const [email, setEmail] = useState('');
@@ -75,6 +76,11 @@ export default function UpdateEmailPage() {
       });
       
       if (error) throw error;
+      
+      // Track email update
+      trackEvent(AnalyticsEvents.UPDATE_EMAIL, {
+        userId: currentUser?.id
+      });
       
       toast({
         title: 'Verification email sent',

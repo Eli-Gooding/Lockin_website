@@ -7,6 +7,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useToast } from "@/components/ui/use-toast";
 import { Toaster } from "@/components/ui/toaster";
+import { trackEvent, AnalyticsEvents } from '@/lib/analytics';
 
 // Component that uses search params
 function SuccessContent() {
@@ -18,6 +19,15 @@ function SuccessContent() {
 
   // Get session ID from URL
   const sessionId = searchParams.get('session_id');
+  
+  // Track successful purchase
+  useEffect(() => {
+    if (sessionId) {
+      trackEvent(AnalyticsEvents.COMPLETE_PURCHASE, {
+        sessionId
+      });
+    }
+  }, [sessionId]);
 
   const handleDownload = async (platform: 'mac' | 'windows' | 'linux') => {
     if (!email) {
@@ -46,6 +56,12 @@ function SuccessContent() {
         throw new Error(data.error || 'Something went wrong');
       }
 
+      // Track app download
+      trackEvent(AnalyticsEvents.DOWNLOAD_APP, {
+        platform,
+        email
+      });
+      
       // Redirect to the appropriate download URL
       window.location.href = data.downloadUrls[platform];
       
