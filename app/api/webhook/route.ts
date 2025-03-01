@@ -3,6 +3,9 @@ import { stripe } from '@/lib/stripe';
 import { supabase } from '@/lib/supabase';
 import { headers } from 'next/headers';
 
+// Set dynamic runtime to handle headers
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   const body = await request.text();
   const signature = headers().get('stripe-signature') || '';

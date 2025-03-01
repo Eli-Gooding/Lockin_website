@@ -3,6 +3,9 @@ import { supabase } from '@/lib/supabase';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 
+// Set dynamic runtime to handle cookies
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     // Create a Supabase client for server-side operations

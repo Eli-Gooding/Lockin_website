@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+// Set dynamic runtime
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   try {
     const { email } = await request.json();

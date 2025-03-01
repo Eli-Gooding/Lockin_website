@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createCheckoutSession } from '@/lib/stripe';
 
+// Set dynamic runtime
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   try {
     const { email } = await request.json();
