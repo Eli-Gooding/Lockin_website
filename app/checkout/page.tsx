@@ -24,29 +24,52 @@ export default function CheckoutPage() {
         const { data: { session } } = await supabase.auth.getSession();
         
         if (!session) {
+          toast({
+            title: 'Authentication required',
+            description: 'Please sign in to continue',
+            variant: 'destructive',
+          });
           router.push('/auth');
           return;
         }
 
-        const userData = await fetch('/api/user').then(res => res.json());
-        
-        if (userData.has_active_subscription) {
-          // User already has a subscription, redirect to dashboard
-          router.push('/dashboard');
-          return;
+        try {
+          const userData = await fetch('/api/user').then(res => {
+            if (!res.ok) {
+              throw new Error(`API error: ${res.status}`);
+            }
+            return res.json();
+          });
+          
+          if (userData.has_active_subscription) {
+            // User already has a subscription, redirect to dashboard
+            router.push('/dashboard');
+            return;
+          }
+          
+          setUser(userData);
+          
+          // Track checkout page view
+          trackEvent(AnalyticsEvents.VIEW_CHECKOUT);
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+          toast({
+            title: 'Error',
+            description: 'Failed to load user data. Please try signing in again.',
+            variant: 'destructive',
+          });
+          // Sign out and redirect to auth page on API error
+          await supabase.auth.signOut();
+          router.push('/auth');
         }
-        
-        setUser(userData);
-        
-        // Track checkout page view
-        trackEvent(AnalyticsEvents.VIEW_CHECKOUT);
       } catch (error) {
-        console.error('Error fetching user:', error);
+        console.error('Error checking session:', error);
         toast({
           title: 'Error',
-          description: 'Failed to load user data',
+          description: 'Failed to verify your session. Please sign in again.',
           variant: 'destructive',
         });
+        router.push('/auth');
       } finally {
         setIsLoading(false);
       }
@@ -85,16 +108,23 @@ export default function CheckoutPage() {
       const data = await response.json();
 
       if (!response.ok) {
+        console.error('Checkout error:', data);
         throw new Error(data.error || 'Something went wrong');
       }
 
+      if (!data.url) {
+        throw new Error('No checkout URL returned from the server');
+      }
+
+      console.log('Redirecting to checkout:', data.url);
+      
       // Redirect to Stripe Checkout
       window.location.href = data.url;
     } catch (error: any) {
-      console.error('Error:', error);
+      console.error('Error creating checkout session:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to create checkout session. Please try again.',
+        title: 'Checkout Error',
+        description: error.message || 'Failed to create checkout session. Please try again.',
         variant: 'destructive',
       });
       setIsProcessing(false);

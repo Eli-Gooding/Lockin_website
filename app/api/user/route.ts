@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 
@@ -8,8 +7,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    // Create a Supabase client for server-side operations
+    // Create a Supabase client for server-side operations with proper cookie handling
     const cookieStore = cookies();
+    
     const supabaseServer = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL || '',
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
@@ -18,14 +18,21 @@ export async function GET() {
           get(name: string) {
             return cookieStore.get(name)?.value;
           },
+          set(name: string, value: string, options: any) {
+            cookieStore.set(name, value, options);
+          },
+          remove(name: string, options: any) {
+            cookieStore.set(name, '', { ...options, maxAge: 0 });
+          },
         },
       }
     );
 
     // Get the current user
-    const { data: { user } } = await supabaseServer.auth.getUser();
+    const { data: { user }, error: userError } = await supabaseServer.auth.getUser();
 
-    if (!user) {
+    if (userError || !user) {
+      console.error('Authentication error:', userError);
       return NextResponse.json(
         { error: 'Not authenticated' },
         { status: 401 }
@@ -33,14 +40,41 @@ export async function GET() {
     }
 
     // Get the user profile
-    const { data: profile, error } = await supabaseServer
+    const { data: profile, error: profileError } = await supabaseServer
       .from('profiles')
       .select('*')
       .eq('id', user.id)
       .single();
 
-    if (error) {
-      console.error('Error fetching profile:', error);
+    if (profileError) {
+      console.error('Error fetching profile:', profileError);
+      
+      // If the profile doesn't exist, create it
+      if (profileError.code === 'PGRST116') {
+        const { data: newProfile, error: createError } = await supabaseServer
+          .from('profiles')
+          .insert([{ id: user.id, email: user.email }])
+          .select()
+          .single();
+          
+        if (createError) {
+          console.error('Error creating profile:', createError);
+          return NextResponse.json(
+            { error: 'Failed to create user profile' },
+            { status: 500 }
+          );
+        }
+        
+        return NextResponse.json({
+          id: user.id,
+          email: user.email,
+          username: user.user_metadata?.username || null,
+          has_active_subscription: false,
+          subscription: null,
+          created_at: user.created_at,
+        });
+      }
+      
       return NextResponse.json(
         { error: 'Failed to fetch user profile' },
         { status: 500 }
@@ -59,7 +93,7 @@ export async function GET() {
     return NextResponse.json({
       id: user.id,
       email: user.email,
-      username: profile?.username,
+      username: profile?.username || user.user_metadata?.username,
       has_active_subscription: profile?.has_active_subscription || false,
       subscription: subscription || null,
       created_at: user.created_at,
