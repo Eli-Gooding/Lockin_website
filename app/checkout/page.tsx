@@ -41,14 +41,17 @@ export default function CheckoutPage() {
         try {
           // Fetch user data with the session
           const response = await fetch('/api/user', {
+            method: 'GET',
             headers: {
               'Cache-Control': 'no-cache',
+              'Authorization': `Bearer ${session.access_token}`,
             },
+            credentials: 'include',
           });
           
           if (!response.ok) {
             console.error('API error status:', response.status);
-            const errorData = await response.json();
+            const errorData = await response.json().catch(() => ({}));
             console.error('API error data:', errorData);
             throw new Error(`API error: ${response.status}`);
           }
@@ -126,13 +129,15 @@ export default function CheckoutPage() {
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache',
+          'Authorization': `Bearer ${session.access_token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({ email: user.email }),
       });
 
       if (!response.ok) {
         console.error('Checkout error status:', response.status);
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         console.error('Checkout error data:', errorData);
         throw new Error(errorData.error || 'Something went wrong');
       }

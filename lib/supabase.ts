@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -7,18 +8,43 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Supabase URL or Anon Key is missing');
 }
 
-// Create a Supabase client with persistent session handling
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    // Use the default storage key that Supabase expects
-    storageKey: 'sb-' + supabaseUrl.split('//')[1].split('.')[0] + '-auth-token',
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    // Use pkce flow for better security
-    flowType: 'pkce',
-  },
-});
+// Extract the project reference from the URL
+const projectRef = supabaseUrl.split('//')[1]?.split('.')[0] || 'cxxeznluwxayqmkignya';
+console.log('Using Supabase project reference:', projectRef);
+
+// Function to clear old Supabase cookies
+const clearOldSupabaseCookies = () => {
+  if (typeof window !== 'undefined') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      // If it's a Supabase cookie but not for our current project
+      if (cookie.startsWith('sb-') && !cookie.startsWith(`sb-${projectRef}`)) {
+        const cookieName = cookie.split('=')[0];
+        console.log('Clearing old Supabase cookie:', cookieName);
+        document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+      }
+    }
+  }
+};
+
+// Clear old cookies on initialization
+if (typeof window !== 'undefined') {
+  clearOldSupabaseCookies();
+}
+
+// Create a Supabase client with browser-specific cookie handling
+export const supabase = typeof window !== 'undefined'
+  ? createBrowserClient(supabaseUrl, supabaseAnonKey)
+  : createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        storageKey: `sb-${projectRef}-auth-token`,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        flowType: 'pkce',
+      },
+    });
 
 // Helper function to check if user is authenticated
 export async function isAuthenticated() {

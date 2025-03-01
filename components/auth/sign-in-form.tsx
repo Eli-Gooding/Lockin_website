@@ -33,6 +33,10 @@ export default function SignInForm() {
     try {
       console.log('Attempting to sign in with:', email);
       
+      // Clear any existing sessions first to avoid conflicts
+      await supabase.auth.signOut();
+      
+      // Sign in with email and password
       const { error, data } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -43,6 +47,7 @@ export default function SignInForm() {
       }
 
       console.log('Sign in successful, session established');
+      console.log('Session token:', data.session.access_token.substring(0, 10) + '...');
       
       // Track successful sign in
       trackEvent(AnalyticsEvents.SIGN_IN, {
@@ -55,7 +60,39 @@ export default function SignInForm() {
       });
       
       // Ensure the session is properly set before redirecting
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Verify the session was properly set
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        console.error('Session not established after sign in');
+        throw new Error('Failed to establish session');
+      }
+      
+      console.log('Session verified, redirecting to dashboard');
+      
+      // Test the API connection before redirecting
+      try {
+        const response = await fetch('/api/user', {
+          method: 'GET',
+          headers: {
+            'Cache-Control': 'no-cache',
+          },
+          credentials: 'include',
+        });
+        
+        if (response.ok) {
+          console.log('API connection successful');
+          const userData = await response.json();
+          console.log('User data:', userData);
+        } else {
+          console.error('API connection failed:', response.status);
+          const errorText = await response.text();
+          console.error('API error:', errorText);
+        }
+      } catch (apiError) {
+        console.error('API test error:', apiError);
+      }
       
       // Redirect to dashboard or home page
       router.push('/dashboard');

@@ -14,7 +14,16 @@ export async function POST(request: Request) {
     const cookieStore = cookies();
     
     // Log available cookies for debugging
-    console.log('Available cookies:', cookieStore.getAll().map(c => c.name));
+    const allCookies = cookieStore.getAll();
+    console.log('Available cookies in checkout API:', allCookies.map(c => c.name));
+    
+    // Check if we have any Supabase cookies
+    const supabaseCookies = allCookies.filter(c => c.name.startsWith('sb-'));
+    if (supabaseCookies.length === 0) {
+      console.log('No Supabase cookies found');
+    } else {
+      console.log('Found Supabase cookies:', supabaseCookies.map(c => c.name));
+    }
     
     const supabaseServer = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -42,6 +51,26 @@ export async function POST(request: Request) {
     // Get the current session
     const { data: { session }, error: sessionError } = await supabaseServer.auth.getSession();
 
+    // Try to get the authorization header as a fallback
+    let user = session?.user;
+    if (!user) {
+      const authHeader = request.headers.get('authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        console.log('Found authorization header, attempting to use token');
+        const token = authHeader.substring(7);
+        
+        try {
+          const { data: { user: tokenUser }, error } = await supabaseServer.auth.getUser(token);
+          if (!error && tokenUser) {
+            user = tokenUser;
+            console.log('Successfully authenticated with token for user:', user.email);
+          }
+        } catch (tokenError) {
+          console.error('Token authentication error:', tokenError);
+        }
+      }
+    }
+
     if (sessionError) {
       console.error('Session error:', sessionError);
       return NextResponse.json(
@@ -50,15 +79,15 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!session) {
-      console.log('No session found in checkout API');
+    if (!user) {
+      console.log('No authenticated user found in checkout API');
       return NextResponse.json(
         { error: 'Not authenticated' },
         { status: 401 }
       );
     }
 
-    console.log('Session found for user:', session.user.email);
+    console.log('User found for checkout:', user.email);
 
     // Parse the request body
     const body = await request.json();
@@ -73,8 +102,8 @@ export async function POST(request: Request) {
     }
 
     // Verify that the email matches the authenticated user
-    if (email !== session.user.email) {
-      console.log('Email mismatch:', { requestEmail: email, sessionEmail: session.user.email });
+    if (email !== user.email) {
+      console.log('Email mismatch:', { requestEmail: email, userEmail: user.email });
       return NextResponse.json(
         { error: 'Email does not match authenticated user' },
         { status: 403 }
