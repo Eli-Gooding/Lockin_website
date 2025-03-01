@@ -24,8 +24,8 @@ export async function createCheckoutSession(customerEmail: string) {
       },
     ],
     mode: 'subscription',
-    success_url: `${process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'}/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'}`,
+    success_url: `${process.env.NEXT_PUBLIC_URL || 'https://lockin.app'}/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${process.env.NEXT_PUBLIC_URL || 'https://lockin.app'}`,
     customer_email: customerEmail,
     metadata: {
       customerEmail,
