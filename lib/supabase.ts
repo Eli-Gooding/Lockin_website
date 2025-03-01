@@ -3,6 +3,7 @@ import { createBrowserClient } from '@supabase/ssr';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Supabase URL or Anon Key is missing');
@@ -45,6 +46,17 @@ export const supabase = typeof window !== 'undefined'
         flowType: 'pkce',
       },
     });
+
+// Create a service role client for admin operations (like webhooks)
+// This bypasses RLS policies
+export const supabaseAdmin = supabaseServiceKey 
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
+  : null;
 
 // Helper function to check if user is authenticated
 export async function isAuthenticated() {

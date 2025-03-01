@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase';
 import { headers } from 'next/headers';
 
 // Set dynamic runtime to handle headers
@@ -30,6 +30,15 @@ export async function POST(request: Request) {
     );
   }
 
+  // Check if supabaseAdmin is available
+  if (!supabaseAdmin) {
+    console.error('Supabase service role client is not available');
+    return NextResponse.json(
+      { error: 'Server configuration error' },
+      { status: 500 }
+    );
+  }
+
   // Handle the event
   switch (event.type) {
     case 'checkout.session.completed':
@@ -47,13 +56,21 @@ export async function POST(request: Request) {
       }
 
       try {
+        console.log(`Processing payment for ${customerEmail}`);
+        
         // Find user by email
-        const { data: userProfiles, error: userError } = await supabase
+        const { data: userProfiles, error: userError } = await supabaseAdmin
           .from('profiles')
           .select('id, email')
           .eq('email', customerEmail);
 
-        if (userError || !userProfiles || userProfiles.length === 0) {
+        if (userError) {
+          console.error('Error finding user:', userError);
+          throw new Error(`Error finding user: ${userError.message}`);
+        }
+
+        if (!userProfiles || userProfiles.length === 0) {
+          console.error(`User not found for email: ${customerEmail}`);
           throw new Error(`User not found for email: ${customerEmail}`);
         }
 
@@ -61,8 +78,10 @@ export async function POST(request: Request) {
         const stripeCustomerId = session.customer;
         const subscriptionId = session.subscription;
 
+        console.log(`Updating subscription status for user ${userId}`);
+
         // Update user's subscription status and Stripe customer ID
-        await supabase
+        const { error: updateError } = await supabaseAdmin
           .from('profiles')
           .update({
             has_active_subscription: true,
@@ -70,13 +89,18 @@ export async function POST(request: Request) {
             updated_at: new Date().toISOString(),
           })
           .eq('id', userId);
+          
+        if (updateError) {
+          console.error('Error updating user profile:', updateError);
+          throw new Error(`Error updating user profile: ${updateError.message}`);
+        }
 
         // If this is a subscription, record it in the subscriptions table
         if (session.mode === 'subscription' && subscriptionId) {
           // Get subscription details from Stripe
           const subscription = await stripe.subscriptions.retrieve(subscriptionId as string);
           
-          await supabase
+          const { error: subscriptionError } = await supabaseAdmin
             .from('subscriptions')
             .insert({
               user_id: userId,
@@ -89,9 +113,14 @@ export async function POST(request: Request) {
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             });
+            
+          if (subscriptionError) {
+            console.error('Error recording subscription:', subscriptionError);
+            // Don't throw here, as the user is already updated
+          }
         } else {
           // Record the one-time purchase
-          await supabase
+          const { error: purchaseError } = await supabaseAdmin
             .from('purchases')
             .insert({
               user_id: userId,
@@ -104,6 +133,11 @@ export async function POST(request: Request) {
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             });
+            
+          if (purchaseError) {
+            console.error('Error recording purchase:', purchaseError);
+            // Don't throw here, as the user is already updated
+          }
         }
 
         console.log(`Payment successful for ${customerEmail}`);
@@ -123,19 +157,27 @@ export async function POST(request: Request) {
       const subscriptionId = subscription.id;
       
       try {
+        console.log(`Processing subscription update for ${subscriptionId}`);
+        
         // Find the subscription in our database
-        const { data: subscriptionData, error: subError } = await supabase
+        const { data: subscriptionData, error: subError } = await supabaseAdmin
           .from('subscriptions')
           .select('user_id')
           .eq('stripe_subscription_id', subscriptionId)
           .single();
           
-        if (subError || !subscriptionData) {
+        if (subError) {
+          console.error(`Error finding subscription: ${subError.message}`);
+          throw new Error(`Subscription not found: ${subscriptionId}`);
+        }
+        
+        if (!subscriptionData) {
+          console.error(`Subscription not found: ${subscriptionId}`);
           throw new Error(`Subscription not found: ${subscriptionId}`);
         }
         
         // Update the subscription status
-        await supabase
+        const { error: updateSubError } = await supabaseAdmin
           .from('subscriptions')
           .update({
             status: subscriptionStatus,
@@ -146,15 +188,25 @@ export async function POST(request: Request) {
           })
           .eq('stripe_subscription_id', subscriptionId);
           
+        if (updateSubError) {
+          console.error(`Error updating subscription: ${updateSubError.message}`);
+          throw new Error(`Error updating subscription: ${updateSubError.message}`);
+        }
+          
         // Update the user's active subscription status
         const isActive = subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
-        await supabase
+        const { error: updateUserError } = await supabaseAdmin
           .from('profiles')
           .update({
             has_active_subscription: isActive,
             updated_at: new Date().toISOString(),
           })
           .eq('id', subscriptionData.user_id);
+          
+        if (updateUserError) {
+          console.error(`Error updating user: ${updateUserError.message}`);
+          throw new Error(`Error updating user: ${updateUserError.message}`);
+        }
           
         console.log(`Subscription ${subscriptionId} updated to ${subscriptionStatus}`);
       } catch (error: any) {
