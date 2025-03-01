@@ -36,6 +36,7 @@ export default function CheckoutPage() {
         }
 
         console.log('Session found:', session.user.email);
+        console.log('Session token:', session.access_token.substring(0, 10) + '...');
 
         try {
           // Fetch user data with the session
@@ -46,10 +47,14 @@ export default function CheckoutPage() {
           });
           
           if (!response.ok) {
+            console.error('API error status:', response.status);
+            const errorData = await response.json();
+            console.error('API error data:', errorData);
             throw new Error(`API error: ${response.status}`);
           }
           
           const userData = await response.json();
+          console.log('User data fetched successfully:', userData);
           
           if (userData.has_active_subscription) {
             // User already has a subscription, redirect to dashboard
@@ -104,20 +109,35 @@ export default function CheckoutPage() {
     });
 
     try {
+      console.log('Starting checkout process for:', user.email);
+      
+      // Get the current session to ensure we have a fresh token
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        console.error('No session found when starting checkout');
+        throw new Error('Your session has expired. Please sign in again.');
+      }
+      
+      console.log('Session confirmed before checkout:', session.user.email);
+      
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
         },
         body: JSON.stringify({ email: user.email }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        console.error('Checkout error:', data);
-        throw new Error(data.error || 'Something went wrong');
+        console.error('Checkout error status:', response.status);
+        const errorData = await response.json();
+        console.error('Checkout error data:', errorData);
+        throw new Error(errorData.error || 'Something went wrong');
       }
+
+      const data = await response.json();
 
       if (!data.url) {
         throw new Error('No checkout URL returned from the server');

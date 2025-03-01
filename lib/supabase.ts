@@ -11,10 +11,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
-    storageKey: 'supabase.auth.token',
+    // Use the default storage key that Supabase expects
+    storageKey: 'sb-' + supabaseUrl.split('//')[1].split('.')[0] + '-auth-token',
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    flowType: 'implicit',
+    // Use pkce flow for better security
+    flowType: 'pkce',
   },
 });
 
