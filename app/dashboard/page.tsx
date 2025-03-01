@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { Toaster } from '@/components/ui/toaster';
-import { supabase } from '@/lib/supabase';
+import { supabase, getUser, GOOGLE_DRIVE_URLS } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { Download, LogOut } from 'lucide-react';
+import { Download, CheckCircle, XCircle, Apple, Monitor } from 'lucide-react';
 import Link from 'next/link';
 import type { User } from '@/lib/supabase';
 import { trackEvent, AnalyticsEvents } from '@/lib/analytics';
@@ -14,7 +14,6 @@ import { trackEvent, AnalyticsEvents } from '@/lib/analytics';
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDownloading, setIsDownloading] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -26,6 +25,11 @@ export default function DashboardPage() {
         
         if (!session) {
           console.log('No session found, redirecting to auth');
+          toast({
+            title: 'Authentication required',
+            description: 'Please sign in to continue',
+            variant: 'destructive',
+          });
           router.push('/auth');
           return;
         }
@@ -37,21 +41,22 @@ export default function DashboardPage() {
           const response = await fetch('/api/user', {
             headers: {
               'Cache-Control': 'no-cache',
+              'Authorization': `Bearer ${session.access_token}`,
             },
+            credentials: 'include',
           });
           
           if (!response.ok) {
+            console.error('API error status:', response.status);
             throw new Error(`API error: ${response.status}`);
           }
           
           const userData = await response.json();
+          console.log('User data fetched successfully:', userData);
           setUser(userData);
           
-          // Track dashboard view
-          trackEvent(AnalyticsEvents.VIEW_DASHBOARD, {
-            userId: userData.id,
-            hasSubscription: userData.has_active_subscription
-          });
+          // Track dashboard page view
+          trackEvent(AnalyticsEvents.VIEW_DASHBOARD);
         } catch (error) {
           console.error('Error fetching user data:', error);
           toast({
@@ -76,67 +81,45 @@ export default function DashboardPage() {
     checkUser();
   }, [router, toast]);
 
-  const handleSignOut = async () => {
-    try {
-      await supabase.auth.signOut();
-      
-      // Track sign out
-      trackEvent(AnalyticsEvents.SIGN_OUT);
-      
-      router.push('/');
-      router.refresh();
-    } catch (error) {
-      console.error('Error signing out:', error);
+  const handleDownload = (platform: 'mac' | 'windows') => {
+    if (!user?.has_active_subscription) {
       toast({
-        title: 'Error',
-        description: 'Failed to sign out',
+        title: 'Subscription Required',
+        description: 'You need an active subscription to download the app.',
         variant: 'destructive',
       });
-    }
-  };
-
-  const handleDownload = async (platform: string) => {
-    if (!user?.has_active_subscription) {
-      router.push('/checkout');
       return;
     }
 
-    setIsDownloading(true);
-    
     try {
-      // For now, we'll just simulate a download with a dummy text file
-      const dummyContent = `LockIn App for ${platform}\nThis is a placeholder for the actual app download.`;
-      const blob = new Blob([dummyContent], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `LockIn-${platform}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      // Track app download from dashboard
-      trackEvent(AnalyticsEvents.DOWNLOAD_APP, {
+      // Track download attempt
+      trackEvent(AnalyticsEvents.APP_DOWNLOAD, {
         platform,
-        fromDashboard: true,
-        hasSubscription: user?.has_active_subscription
+        userId: user.id
       });
       
-      toast({
-        title: 'Download started',
-        description: `Your LockIn app for ${platform} is downloading.`,
+      if (platform === 'windows') {
+        toast({ 
+          title: 'Coming Soon', 
+          description: 'Windows version is coming soon. Currently only macOS is supported.' 
+        });
+        return;
+      }
+      
+      // For macOS, we use the direct Google Drive link
+      window.open(GOOGLE_DRIVE_URLS.mac, '_blank');
+      
+      toast({ 
+        title: 'Download Started', 
+        description: 'Your download should begin shortly.' 
       });
-    } catch (error) {
-      console.error('Error downloading:', error);
+    } catch (error: any) {
+      console.error('Error downloading app:', error);
       toast({
-        title: 'Download failed',
-        description: 'There was an error starting your download.',
+        title: 'Download Error',
+        description: error.message || 'Failed to download the app. Please try again.',
         variant: 'destructive',
       });
-    } finally {
-      setIsDownloading(false);
     }
   };
 
@@ -153,7 +136,7 @@ export default function DashboardPage() {
       <main className="flex min-h-screen flex-col items-center justify-center bg-black text-white p-6">
         <div className="text-center">
           <div className="animate-pulse h-8 w-32 bg-gray-700 rounded mb-4 mx-auto"></div>
-          <p className="text-gray-400">Loading your dashboard...</p>
+          <p className="text-gray-400">Loading dashboard...</p>
         </div>
       </main>
     );
@@ -168,8 +151,14 @@ export default function DashboardPage() {
               LockIn
             </h1>
           </Link>
-          <Button variant="ghost" size="sm" onClick={handleSignOut}>
-            <LogOut className="h-4 w-4 mr-2" />
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              router.push('/');
+            }}
+          >
             Sign Out
           </Button>
         </div>
@@ -177,110 +166,86 @@ export default function DashboardPage() {
 
       <div className="container mx-auto px-4 py-8 flex-1">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold mb-6">Welcome, {user?.email?.split('@')[0] || 'User'}</h2>
+          <h2 className="text-3xl font-bold mb-2">Welcome, {user?.username || user?.email?.split('@')[0]}</h2>
+          <p className="text-gray-400 mb-8">Manage your LockIn account and download the app</p>
           
-          <div className="bg-gray-900/80 backdrop-blur-sm border border-gray-800 rounded-xl p-6 mb-8">
-            <h3 className="text-xl font-medium mb-4">Your Subscription</h3>
-            
-            {user?.has_active_subscription ? (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between p-4 bg-emerald-900/20 border border-emerald-800/50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-emerald-400">Active Subscription</p>
-                    <p className="text-sm text-gray-400">You have full access to LockIn</p>
-                  </div>
-                  <div className="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-sm">
-                    Active
-                  </div>
-                </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="md:col-span-2">
+              <div className="bg-gray-900/80 backdrop-blur-sm border border-gray-800 rounded-xl p-6 mb-6">
+                <h3 className="text-xl font-medium mb-4">Download LockIn</h3>
                 
-                <div>
-                  <h4 className="text-lg font-medium mb-3">Download LockIn</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* macOS Download Card */}
+                  <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-800 rounded-xl p-6 flex flex-col items-center text-center">
+                    <Apple className="h-12 w-12 text-emerald-400 mb-4" />
+                    <h4 className="text-xl font-medium mb-1">macOS</h4>
+                    <p className="text-sm text-gray-400 mb-6">Compatible with macOS 10.15 (Catalina) and later</p>
+                    
+                    {user?.has_active_subscription ? (
+                      <a 
+                        href={GOOGLE_DRIVE_URLS.mac} 
+                        download
+                        onClick={() => handleDownload('mac')}
+                        className="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white font-medium transition-all duration-200 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30"
+                      >
+                        <Download className="mr-2 h-5 w-5" />
+                        Download for Mac
+                      </a>
+                    ) : (
+                      <Button 
+                        onClick={() => router.push('/checkout')}
+                        className="px-6 py-3 bg-gray-700 hover:bg-gray-600"
+                      >
+                        Subscribe to Download
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {/* Windows Download Card */}
+                  <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-800 rounded-xl p-6 flex flex-col items-center text-center">
+                    <Monitor className="h-12 w-12 text-gray-500 mb-4" />
+                    <h4 className="text-xl font-medium mb-1">Windows</h4>
+                    <p className="text-sm text-gray-400 mb-6">Windows support is coming soon</p>
+                    
                     <Button 
-                      variant="outline" 
-                      className="border-gray-700 hover:bg-gray-800"
-                      onClick={() => handleDownload('macOS')}
-                      disabled={isDownloading}
+                      onClick={() => handleDownload('windows')}
+                      disabled={true}
+                      className="px-6 py-3 bg-gray-700 cursor-not-allowed"
                     >
-                      <Download className="mr-2 h-4 w-4" /> macOS
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      className="border-gray-700 hover:bg-gray-800"
-                      onClick={() => handleDownload('Windows')}
-                      disabled={isDownloading}
-                    >
-                      <Download className="mr-2 h-4 w-4" /> Windows
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      className="border-gray-700 hover:bg-gray-800"
-                      onClick={() => handleDownload('Linux')}
-                      disabled={isDownloading}
-                    >
-                      <Download className="mr-2 h-4 w-4" /> Linux
+                      <Download className="mr-2 h-5 w-5" />
+                      Coming Soon
                     </Button>
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between p-4 bg-gray-800/50 border border-gray-700 rounded-lg">
-                  <div>
-                    <p className="font-medium">No Active Subscription</p>
-                    <p className="text-sm text-gray-400">Subscribe to LockIn to get started</p>
-                  </div>
-                  <div className="bg-gray-700/50 text-gray-300 px-3 py-1 rounded-full text-sm">
-                    Inactive
-                  </div>
+            </div>
+            
+            <div className="bg-gray-900/80 backdrop-blur-sm border border-gray-800 rounded-xl p-6 h-fit">
+              <h3 className="text-xl font-medium mb-4">Subscription Status</h3>
+              
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400">Status:</span>
+                  {user?.has_active_subscription ? (
+                    <div className="flex items-center">
+                      <CheckCircle className="h-4 w-4 text-emerald-500 mr-1" />
+                      <span className="text-emerald-400">Active</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center">
+                      <XCircle className="h-4 w-4 text-red-500 mr-1" />
+                      <span className="text-red-400">Inactive</span>
+                    </div>
+                  )}
                 </div>
                 
-                <div className="text-center">
-                  <p className="mb-4 text-gray-400">
-                    Get access to LockIn for just $2/month
-                  </p>
+                {!user?.has_active_subscription && (
                   <Link href="/checkout">
-                    <Button className="px-8 py-6 text-lg bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 rounded-xl shadow-lg shadow-emerald-500/20 transition-all duration-300 hover:shadow-emerald-500/30">
+                    <Button className="w-full bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600">
                       Subscribe Now
                     </Button>
                   </Link>
-                </div>
-              </div>
-            )}
-          </div>
-          
-          <div className="bg-gray-900/80 backdrop-blur-sm border border-gray-800 rounded-xl p-6">
-            <h3 className="text-xl font-medium mb-4">Account Settings</h3>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center p-4 bg-gray-800/50 border border-gray-700 rounded-lg">
-                <div>
-                  <p className="font-medium">Email</p>
-                  <p className="text-sm text-gray-400">{user?.email}</p>
-                </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="border-gray-700 hover:bg-gray-800"
-                  onClick={handleChangeEmail}
-                >
-                  Change
-                </Button>
-              </div>
-              
-              <div className="flex justify-between items-center p-4 bg-gray-800/50 border border-gray-700 rounded-lg">
-                <div>
-                  <p className="font-medium">Password</p>
-                  <p className="text-sm text-gray-400">••••••••</p>
-                </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="border-gray-700 hover:bg-gray-800"
-                  onClick={handleChangePassword}
-                >
-                  Change
-                </Button>
+                )}
               </div>
             </div>
           </div>

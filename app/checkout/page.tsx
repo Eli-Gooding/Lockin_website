@@ -222,7 +222,7 @@ export default function CheckoutPage() {
                     <CheckCircle className="h-5 w-5 text-emerald-500 mt-0.5" />
                     <div>
                       <p className="font-medium">Cross-Platform Access</p>
-                      <p className="text-sm text-gray-400">Use on macOS, Windows, and Linux</p>
+                      <p className="text-sm text-gray-400">macOS support now, Windows coming soon</p>
                     </div>
                   </div>
                   

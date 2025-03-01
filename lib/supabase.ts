@@ -86,4 +86,51 @@ export async function getUser(): Promise<User | null> {
     console.error('Error getting user:', error);
     return null;
   }
+}
+
+// Constants for app downloads
+export const APP_BUCKET_NAME = 'app-downloads';
+export const MAC_APP_PATH = 'LockIn-mac.dmg';
+
+// Google Drive download URLs
+export const GOOGLE_DRIVE_URLS = {
+  mac: process.env.NEXT_PUBLIC_MAC_GOOGLE_DRIVE_URL || 'https://drive.google.com/uc?export=download&id=YOUR_FILE_ID',
+  windows: '' // Not available yet
+};
+
+/**
+ * Get a signed URL for downloading the app
+ * @param platform The platform to download for ('mac' | 'windows')
+ * @returns A signed URL for downloading the app or null if error
+ */
+export async function getAppDownloadUrl(platform: 'mac' | 'windows'): Promise<string | null> {
+  try {
+    // Currently only macOS is supported
+    if (platform !== 'mac') {
+      console.log('Only macOS is currently supported');
+      return null;
+    }
+    
+    // If Google Drive URL is configured, use that instead of Supabase Storage
+    if (GOOGLE_DRIVE_URLS.mac && GOOGLE_DRIVE_URLS.mac !== 'https://drive.google.com/uc?export=download&id=YOUR_FILE_ID') {
+      console.log('Using Google Drive URL for macOS download');
+      return GOOGLE_DRIVE_URLS.mac;
+    }
+    
+    // Get a signed URL that expires in 60 minutes
+    const { data, error } = await supabase
+      .storage
+      .from(APP_BUCKET_NAME)
+      .createSignedUrl(MAC_APP_PATH, 60 * 60);
+    
+    if (error) {
+      console.error('Error getting download URL:', error);
+      return null;
+    }
+    
+    return data.signedUrl;
+  } catch (error) {
+    console.error('Error in getAppDownloadUrl:', error);
+    return null;
+  }
 } 

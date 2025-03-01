@@ -9,6 +9,10 @@ A landing page, authentication system, and payment portal for the LockIn product
 - Stripe integration for payments
 - User dashboard for managing account and downloads
 - Success page after payment
+- **Task Management**: Create, organize, and prioritize your tasks
+- **Focus Timer**: Stay productive with customizable focus sessions
+- **Cross-Platform**: macOS support now, Windows coming soon
+- **Subscription Model**: $2/month for full access
 
 ## User Flow
 
@@ -130,6 +134,30 @@ The main components of the application are:
 - `created_at` - TIMESTAMPTZ
 - `updated_at` - TIMESTAMPTZ
 
+## App Distribution
+
+### macOS App
+
+The macOS app is available for download to users with an active subscription. The app is stored in a private Supabase storage bucket and is accessible only to authenticated users with an active subscription.
+
+To upload a new version of the app:
+
+1. Build the macOS app
+2. Upload the DMG file to the `app-downloads` bucket in Supabase storage
+3. Name the file `LockIn-mac.dmg`
+
+### Windows App (Coming Soon)
+
+Windows support is planned for a future release.
+
+## Database Migrations
+
+The project uses Supabase migrations to manage the database schema. To create a new migration:
+
+1. Make your changes to the database schema
+2. Run `npx supabase db diff -f your_migration_name` to generate a migration file
+3. Apply the migration with `npx supabase db push`
+
 ## License
 
-All rights reserved. 
+All rights reserved. This code is proprietary and confidential. 
