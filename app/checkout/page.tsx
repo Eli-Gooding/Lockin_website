@@ -21,9 +21,11 @@ export default function CheckoutPage() {
   useEffect(() => {
     const checkUser = async () => {
       try {
+        // Get session directly
         const { data: { session } } = await supabase.auth.getSession();
         
         if (!session) {
+          console.log('No session found, redirecting to auth');
           toast({
             title: 'Authentication required',
             description: 'Please sign in to continue',
@@ -33,13 +35,21 @@ export default function CheckoutPage() {
           return;
         }
 
+        console.log('Session found:', session.user.email);
+
         try {
-          const userData = await fetch('/api/user').then(res => {
-            if (!res.ok) {
-              throw new Error(`API error: ${res.status}`);
-            }
-            return res.json();
+          // Fetch user data with the session
+          const response = await fetch('/api/user', {
+            headers: {
+              'Cache-Control': 'no-cache',
+            },
           });
+          
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+          
+          const userData = await response.json();
           
           if (userData.has_active_subscription) {
             // User already has a subscription, redirect to dashboard
@@ -55,18 +65,15 @@ export default function CheckoutPage() {
           console.error('Error fetching user data:', error);
           toast({
             title: 'Error',
-            description: 'Failed to load user data. Please try signing in again.',
+            description: 'Failed to load user data. Please try refreshing the page.',
             variant: 'destructive',
           });
-          // Sign out and redirect to auth page on API error
-          await supabase.auth.signOut();
-          router.push('/auth');
         }
       } catch (error) {
         console.error('Error checking session:', error);
         toast({
-          title: 'Error',
-          description: 'Failed to verify your session. Please sign in again.',
+          title: 'Session Error',
+          description: 'Your session has expired. Please sign in again.',
           variant: 'destructive',
         });
         router.push('/auth');

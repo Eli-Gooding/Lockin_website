@@ -21,28 +21,53 @@ export default function DashboardPage() {
   useEffect(() => {
     const checkUser = async () => {
       try {
+        // Get session directly
         const { data: { session } } = await supabase.auth.getSession();
         
         if (!session) {
+          console.log('No session found, redirecting to auth');
           router.push('/auth');
           return;
         }
 
-        const userData = await fetch('/api/user').then(res => res.json());
-        setUser(userData);
-        
-        // Track dashboard view
-        trackEvent(AnalyticsEvents.VIEW_DASHBOARD, {
-          userId: userData.id,
-          hasSubscription: userData.has_active_subscription
-        });
+        console.log('Session found:', session.user.email);
+
+        try {
+          // Fetch user data with the session
+          const response = await fetch('/api/user', {
+            headers: {
+              'Cache-Control': 'no-cache',
+            },
+          });
+          
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+          
+          const userData = await response.json();
+          setUser(userData);
+          
+          // Track dashboard view
+          trackEvent(AnalyticsEvents.VIEW_DASHBOARD, {
+            userId: userData.id,
+            hasSubscription: userData.has_active_subscription
+          });
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+          toast({
+            title: 'Error',
+            description: 'Failed to load user data. Please try refreshing the page.',
+            variant: 'destructive',
+          });
+        }
       } catch (error) {
-        console.error('Error fetching user:', error);
+        console.error('Error checking session:', error);
         toast({
-          title: 'Error',
-          description: 'Failed to load user data',
+          title: 'Session Error',
+          description: 'Your session has expired. Please sign in again.',
           variant: 'destructive',
         });
+        router.push('/auth');
       } finally {
         setIsLoading(false);
       }

@@ -31,6 +31,8 @@ export default function SignInForm() {
     setIsLoading(true);
 
     try {
+      console.log('Attempting to sign in with:', email);
+      
       const { error, data } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -40,6 +42,8 @@ export default function SignInForm() {
         throw error;
       }
 
+      console.log('Sign in successful, session established');
+      
       // Track successful sign in
       trackEvent(AnalyticsEvents.SIGN_IN, {
         userId: data.user?.id
@@ -50,10 +54,14 @@ export default function SignInForm() {
         description: 'You have been signed in',
       });
       
+      // Ensure the session is properly set before redirecting
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Redirect to dashboard or home page
       router.push('/dashboard');
       router.refresh();
     } catch (error: any) {
+      console.error('Sign in error:', error);
       toast({
         title: 'Error signing in',
         description: error.message || 'Please check your credentials and try again',

@@ -7,16 +7,22 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Supabase URL or Anon Key is missing');
 }
 
-// Create a Supabase client with cookie-based auth
+// Create a Supabase client with persistent session handling
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
-    storageKey: 'supabase-auth',
+    storageKey: 'supabase.auth.token',
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    flowType: 'pkce',
+    flowType: 'implicit',
   },
 });
+
+// Helper function to check if user is authenticated
+export async function isAuthenticated() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return !!session;
+}
 
 export type User = {
   id: string;
@@ -28,9 +34,11 @@ export type User = {
 
 export async function getUser(): Promise<User | null> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
     
-    if (!user) return null;
+    if (!session?.user) return null;
+    
+    const user = session.user;
     
     // Get the user profile from the database
     const { data } = await supabase
